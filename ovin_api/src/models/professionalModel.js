@@ -4,8 +4,13 @@ var statusPerson = require('../utils/enums/statusPerson');
 
 module.exports = class Professional extends Person {
     constructor(job, text) {
-        super(job, text)
+        super(text)
+        if (!job || !job.name) throw message.JOB_NAME_REQUIRED;
         this.type = typePerson.PROFESSIONAL;
+        this.job = {
+            name: job.name,
+            keyWords: !job.key_words ? [] : job.key_words
+        };
     }
 
     save(res) {
