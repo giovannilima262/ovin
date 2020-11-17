@@ -1,6 +1,6 @@
 const functions = require('firebase-functions');
 const { functionApplyAlgorithms } = require('./src/triggers/applyApplyAlgorithms');
-const { functionPearsonCalculation } = require('./src/triggers/applypeArsonCalculation');
+const { functionPearsonCalculation } = require('./src/triggers/applyPearsonCalculation');
 
 exports.applyAlgorithms = functions.firestore
     .document('person/{personId}')

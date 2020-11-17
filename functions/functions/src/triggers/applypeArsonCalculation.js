@@ -1,8 +1,9 @@
 const { db } = require('./auth');
 const { CALCULATED, PENDING } = require('../../utils/enums/statusPerson');
 const { PROFESSIONAL, STUDENT } = require('../../utils/enums/typePerson');
-const { removeSpecialCharacter, removeSpecialCharacterArray, groupBy } = require('../../utils/constants');
 const { snapshotConstructor } = require('firebase-functions/lib/providers/firestore');
+
+
 
 exports.functionPearsonCalculation = async function (change, context) {
     // Deleted.
@@ -21,11 +22,11 @@ exports.functionPearsonCalculation = async function (change, context) {
             if (snapshot.empty) {
                 return;
             }
-            const listProfessionals = []
-            const groupProfessionalsName = []
-            const groupProfessionalsKeyWord = []
-            const groupTextKeyWordsProfessionalsName = []
-            const groupTextKeyWordsProfessionalsKeyWord = []
+            let listProfessionals = []
+            let groupProfessionalsName = []
+            let groupProfessionalsKeyWord = []
+            let groupTextKeyWordsProfessionalsName = []
+            let groupTextKeyWordsProfessionalsKeyWord = []
             snapshot.forEach(doc => {
                 listProfessionals.push({
                     id: doc.id,
@@ -37,21 +38,38 @@ exports.functionPearsonCalculation = async function (change, context) {
                 });
             });
 
+            let allElements = [];
+            listProfessionals.forEach(element => {
+                allElements.push(element['jobName'])
+            });
+
+            let elementsArrayStringProfessionals = [... new Set(allElements)];
+
             // GROUP by professions (P)
             groupProfessionalsName = groupBy(listProfessionals, 'jobName');
 
             // GROUP (P) by key words text
-            groupTextKeyWordsProfessionalsName = groupByArray(groupProfessionalsName, 'textKeyWords');
-
+            groupTextKeyWordsProfessionalsName = groupByArray(groupProfessionalsName, 'textKeyWords', elementsArrayStringProfessionals);
 
             // GROUP by key words professions (p)
-            groupProfessionalsKeyWord = groupByArray(listProfessionals, 'jobKeyWords');
+            groupProfessionalsKeyWord = groupByArrayList(listProfessionals, 'jobKeyWords');
 
+            allElements = [];
+            listProfessionals.forEach(element => {
+                for (let index = 0; index < element['textKeyWords'].length; index++) {
+                    allElements.push(element['textKeyWords'][index])
+                }
+            });
+
+            let elementsArrayStringProfessionalsKeyWord = [... new Set(allElements)];
 
             // GROUP (p) by key words text
-            groupTextKeyWordsProfessionalsKeyWord = groupByArray(groupProfessionalsKeyWord, 'textKeyWords');
+            groupTextKeyWordsProfessionalsKeyWord = groupByArray(groupProfessionalsKeyWord, 'textKeyWords', elementsArrayStringProfessionalsKeyWord);
 
-
+            // remove
+            db.collection('groupTextKeyWordsProfessionalsKeyWord').doc('1').set({
+                groupTextKeyWordsProfessionalsKeyWord: groupTextKeyWordsProfessionalsKeyWord,
+            });
 
             // get text student
 
@@ -61,8 +79,8 @@ exports.functionPearsonCalculation = async function (change, context) {
                     return;
                 }
 
-                const listStudents = []
-                const groupTextKeyWordsStudents = []
+                let listStudents = []
+                let groupTextKeyWordsStudents = []
 
                 snapshot.forEach(doc => {
                     listStudents.push({
@@ -75,11 +93,16 @@ exports.functionPearsonCalculation = async function (change, context) {
 
                 // all
                 groupTextKeyWordsStudents = groupByArray(listStudents, 'textKeyWords');
+                db.doc(`groupTextKeyWordsProfessionalsKeyWord`).set(groupTextKeyWordsStudents);
 
                 // with 5 month divisions
 
 
+
+
                 // apply combinational analysis
+
+                console.log(groupTextKeyWordsStudents);
 
             }).catch(error => {
                 console.log(error);
@@ -90,5 +113,79 @@ exports.functionPearsonCalculation = async function (change, context) {
         }).catch(error => {
             console.log(error);
         });
+
+}
+
+
+function removeSpecialCharacter(value) {
+    if (!value) return "";
+    return value.toLowerCase().replace(/[^a-zA-Z ]/g, "").replace(" ", "");
+}
+
+
+function removeSpecialCharacterArray(values) {
+    if (!values) return "";
+    const newArray = [];
+    values.forEach(element => {
+        newArray.push(removeSpecialCharacter(element));
+    });
+    return newArray;
+}
+
+
+function groupBy(arr, prop) {
+    return arr.reduce(function (rv, x) {
+        (rv[x[prop]] = rv[x[prop]] || []).push(x);
+        return rv;
+    }, {});
+}
+
+
+function groupByArray(map, prop, elementsArrayString) {
+    let newList = [];
+
+    elementsArrayString.forEach(name => {
+        let list = [];
+        let allElements = [];
+        map[name].forEach(element => {
+            allElements.push(...element[prop])
+        });
+
+        let elementsArray = [... new Set(allElements)];
+        elementsArray.forEach(element => {
+            list.push(...[
+                map[name].reduce(function (rv, x) {
+                    if (x[prop].indexOf(element) != -1) {
+                        (rv[x[prop][x[prop].indexOf(element)]] = rv[x[prop][x[prop].indexOf(element)]] || []).push(x);
+                    }
+                    return rv;
+                }, {})
+            ]);
+        });
+        newList.push({ name: name, list: list })
+    });
+    return newList;
+}
+
+function groupByArrayList(array, prop) {
+    const list = [];
+    const allElements = [];
+    array.forEach(element => {
+        allElements.push(...element[prop])
+    });
+
+    const elementsArray = [... new Set(allElements)];
+    elementsArray.forEach(element => {
+        list.push(...[
+            array.reduce(function (rv, x) {
+                if (x[prop].indexOf(element) != -1) {
+                    (rv[x[prop][x[prop].indexOf(element)]] = rv[x[prop][x[prop].indexOf(element)]] || []).push(x);
+                }
+                console.log(x[prop].includes(element))
+                return rv;
+            }, {})
+        ]);
+    });
+    return list;
 
 }
