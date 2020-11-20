@@ -1,9 +1,6 @@
 const { db } = require('./auth');
-const { CALCULATED, PENDING } = require('../../utils/enums/statusPerson');
+const { CALCULATED } = require('../../utils/enums/statusPerson');
 const { PROFESSIONAL, STUDENT } = require('../../utils/enums/typePerson');
-const { snapshotConstructor } = require('firebase-functions/lib/providers/firestore');
-
-
 
 exports.functionPearsonCalculation = async function (change, context) {
     // Deleted.
@@ -96,21 +93,24 @@ exports.functionPearsonCalculation = async function (change, context) {
                         textKeyWordsOriginal: doc.data().text.keyWords
                     });
                 });
-                // all
                 groupTextKeyWordsStudents = groupByArrayList(listStudents, 'textKeyWords');
                 // THIS
-                db.collection(`groupTextKeyWordsStudents`).doc('1').set({ groupTextKeyWordsStudents: groupTextKeyWordsStudents });
+
 
                 // with 5 month divisions
 
 
-                // apply combinational analysis
+                // apply combinational analysis (groupTextKeyWordsProfessionalsName);
+                listResultJobs = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsName, groupTextKeyWordsStudents)
+                db.collection('results').doc(change.after.data().cpf).set({
+                    idPerson: change.after.id,
+                    cpfPerson: change.after.data().cpf,
+                    typePerson: STUDENT,
+                    jobs: listResultJobs,
+                    timestamp: new Date()
+                });
 
-                groupTextKeyWordsStudents //  = Map<TextKeyWords>[textKey = List[algorithms = List[name, value]]]
-
-                groupTextKeyWordsProfessionalsName //  = List<ListProfessionalName>[list = Map<TextKeyWords>[textKey = List[algorithms = List[name, value]]], name]
-
-                applyCombinationalAnalysis(groupTextKeyWordsProfessionalsName, groupTextKeyWordsStudents)
+                // apply combinational analysis (groupTextKeyWordsProfessionalsKeyWord);
 
 
             }).catch(error => {
@@ -124,32 +124,6 @@ exports.functionPearsonCalculation = async function (change, context) {
 }
 
 
-
-function applyCombinationalAnalysis(professionals, studentSubjectMatters) {
-    professionals.forEach(professional => {
-        let professionName = professional.name;
-        let textKeyWordsMap = professional.list;
-        textKeyWordsMap.forEach(textKeyWord => {
-            let textKeyWordName = Object.keys(textKeyWord)[0];
-            let textKeyWordMap = textKeyWord[textKeyWordName];
-            let resultsProfession = {
-                name: professionName,
-                textKeyWordName: textKeyWordName,
-                algorithms: textKeyWordMap.map(value => value.algorithms),
-                textKeyWordsOriginal: textKeyWordMap.map(value => value.textKeyWordsOriginal),
-            };
-            studentSubjectMatters.forEach(studentSubjectMatter => {
-                subjectMatterMap = studentSubjectMatter[resultsProfession.textKeyWordName];
-
-                let resultsStudent = {
-                    algorithms: subjectMatterMap.map(value => value.algorithms),
-                };
-            });
-
-
-        });
-    });
-}
 
 function removeSpecialCharacter(value) {
     if (!value) return "";
@@ -215,7 +189,6 @@ function groupByMapArray(map, prop, elementsArrayString) {
                 item[name].forEach(element => {
                     allElements.push(...element[prop])
                 });
-                console.log(allElements)
                 let elementsArray = [... new Set(allElements)];
                 elementsArray.forEach(element => {
                     list.push(...[
@@ -248,7 +221,6 @@ function groupByArrayList(array, prop) {
                 if (x[prop].indexOf(element) != -1) {
                     (rv[x[prop][x[prop].indexOf(element)]] = rv[x[prop][x[prop].indexOf(element)]] || []).push(x);
                 }
-                console.log(x[prop].includes(element))
                 return rv;
             }, {})
         ]);
@@ -256,3 +228,140 @@ function groupByArrayList(array, prop) {
     return list;
 
 }
+
+function applyCombinationalAnalysis(professionals, studentSubjectMatters) {
+    let listResult = [];
+    professionals.forEach(professional => {
+        let professionName = professional.name;
+        let textKeyWordsMap = professional.list;
+        textKeyWordsMap.forEach(textKeyWord => {
+            let textKeyWordName = Object.keys(textKeyWord)[0];
+            let textKeyWordMap = textKeyWord[textKeyWordName];
+            let resultsProfession = {
+                name: professionName,
+                textKeyWordName: textKeyWordName,
+                algorithms: textKeyWordMap.map(value => value.algorithms),
+                textKeyWordsOriginal: textKeyWordMap.map(value => value.textKeyWordsOriginal),
+            };
+            studentSubjectMatters.forEach(studentSubjectMatter => {
+                subjectMatterMap = studentSubjectMatter[resultsProfession.textKeyWordName];
+                if (subjectMatterMap) {
+                    let resultsStudent = {
+                        algorithms: subjectMatterMap.map(value => value.algorithms),
+                    };
+
+                    studentAlgorithms = groupResults(resultsStudent)
+                    professionAlgorithms = groupResults(resultsProfession)
+
+                    studentAlgorithms.forEach(studentR => {
+
+                        let filterProfessionAlgorithms = professionAlgorithms.filter(profession => profession.name == studentR.name)
+                        if (filterProfessionAlgorithms.length > 0) {
+                            let professionR = filterProfessionAlgorithms[0];
+                            let numberCombinations = 0;
+                            let arrayCombination = [];
+                            let arrayCompare = [];
+
+                            if (studentR.values.length > professionR.values.length) {
+                                numberCombinations = professionR.values.length;
+                                arrayCombination = studentR.values;
+                                arrayCompare = professionR.values;
+                            } else if (professionR.values.length > studentR.values.length) {
+                                numberCombinations = studentR.values.length;
+                                arrayCombination = professionR.values;
+                                arrayCompare = studentR.values;
+                            }
+                            let peasonResult = 0;
+                            if (numberCombinations == 0) {
+                                peasonResult = pearson(studentR.values, professionR.values)
+                            } else {
+                                peasonResult = getValuePearsonCombination(arrayCombination, arrayCompare, numberCombinations)
+                            }
+                            listResult.push({
+                                jobs: {
+                                    textKeyWordName: textKeyWordName,
+                                    name: professionName,
+                                    value: peasonResult
+                                }
+                            });
+                        }
+
+                    });
+                }
+
+
+            });
+
+
+        });
+    });
+
+    return listResult;
+}
+
+function getValuePearsonCombination(arrayCombination, arrayCompare, numberCombinations) {
+    let values = [];
+    combine(arrayCombination, numberCombinations).forEach(value => {
+        values.push(Math.abs(pearson(value, arrayCompare)))
+    });
+    if (values.length == 0) return 0;
+    return values.reduce(function (a, b) {
+        return a + b;
+    }, 0) / values.length
+}
+function combine(a, q) {
+    var n = a.length - 1, l = n - q + 1, x = 0, c = [], z = -1, p, j, d, i;
+    if (q > n || q < 2) return c;
+    for (p = [], i = q; p[--i] = i;);
+    while (x <= l) {
+        for (c[++z] = [], j = -1; ++j < q; c[z][j] = a[p[j]]);
+        if (++p[j - 1] > n)
+            while (j--)
+                if (!j && x++, (d = p[j]) < l + j) {
+                    while (j < q) p[j++] = ++d;
+                    break;
+                }
+    }
+    return c;
+};
+
+function groupResults(result) {
+    let algorithms = [];
+    let results = [];
+    result.algorithms.forEach(algorithmsOne => {
+        algorithmsOne.forEach(algorithm => {
+            algorithms.push(algorithm)
+        });
+    })
+    groupsAlgorithms = groupBy(algorithms, 'name')
+    Object.keys(groupsAlgorithms).forEach(name => {
+        results.push({ name: name, values: groupsAlgorithms[name].map(value => value.value) })
+    });
+    return results;
+}
+
+
+function groupBy(arr, prop) {
+    return arr.reduce(function (rv, x) {
+        (rv[x[prop]] = rv[x[prop]] || []).push(x);
+        return rv;
+    }, {});
+}
+
+function pearson(x, y) {
+    let n = x.length;
+    let idx = Array.from({ length: n }, (x, i) => i);
+
+    let avgX = x.reduce((a, b) => a + b) / n;
+    let avgY = y.reduce((a, b) => a + b) / n;
+
+    let numMult = idx.map(i => (x[i] - avgX) * (y[i] - avgY));
+    let numerator = numMult.reduce((a, b) => a + b);
+
+    let denomX = idx.map(i => Math.pow((x[i] - avgX), 2)).reduce((a, b) => a + b);
+    let denomY = idx.map(i => Math.pow((y[i] - avgY), 2)).reduce((a, b) => a + b);
+    let denominator = Math.sqrt(denomX * denomY);
+
+    return numerator / denominator || 0
+
+};
