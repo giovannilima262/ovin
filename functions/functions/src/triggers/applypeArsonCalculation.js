@@ -98,7 +98,6 @@ exports.functionPearsonCalculation = async function (change, context) {
                 var docRef = db.collection('results').doc(change.after.data().cpf);
                 batch.set(docRef, {
                     idPerson: change.after.id,
-                    cpfPerson: change.after.data().cpf,
                     typePerson: STUDENT,
                     timestamp: new Date()
                 });
