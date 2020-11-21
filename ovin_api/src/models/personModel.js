@@ -29,4 +29,24 @@ module.exports = class Person {
                 res.json({ error });
             });
     }
+
+
+    static getResults(res, cpfValue) {
+        server.firestore.collection('results')
+            .doc(cpfValue)
+            .collection('jobs')
+            .orderBy("value", "desc").get().then(snapshot => {
+                if (snapshot.empty) {
+                    res.json(message.STUDENT_NOT_FOUND);
+                    return;
+                }
+                const list = [];
+                snapshot.forEach(doc => {
+                    list.push(doc.data())
+                });
+                res.json(list);
+            }).catch(error => {
+                res.json({ error });
+            });
+    }
 }

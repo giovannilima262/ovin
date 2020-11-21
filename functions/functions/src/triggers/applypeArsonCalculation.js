@@ -91,14 +91,27 @@ exports.functionPearsonCalculation = async function (change, context) {
 
                 listResultJobs = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsName, groupTextKeyWordsStudents, false)
                 listResultJobsKeyWord = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsKeyWord, groupTextKeyWordsStudents, true)
-                db.collection('results').doc(change.after.data().cpf).set({
+
+                var batch = db.batch();
+                const array = [...listResultJobs, ...listResultJobsKeyWord];
+                let index = 0;
+                var docRef = db.collection('results').doc(change.after.data().cpf);
+                batch.set(docRef, {
                     idPerson: change.after.id,
                     cpfPerson: change.after.data().cpf,
                     typePerson: STUDENT,
-                    jobs: [...listResultJobs, ...listResultJobsKeyWord],
                     timestamp: new Date()
                 });
+                array.forEach((doc) => {
+                    docRef = db.collection('results')
+                        .doc(change.after.data().cpf)
+                        .collection('jobs')
+                        .doc(index.toString());
+                    index++;
+                    batch.set(docRef, doc);
+                });
 
+                batch.commit()
 
             }).catch(error => {
                 console.log(error);
@@ -107,7 +120,6 @@ exports.functionPearsonCalculation = async function (change, context) {
         }).catch(error => {
             console.log(error);
         });
-
 }
 
 
@@ -270,18 +282,16 @@ function applyCombinationalAnalysis(professionals, studentSubjectMatters, isJobK
                                 peasonResult = getValuePearsonCombination(arrayCombination, arrayCompare, numberCombinations)
                             }
                             listResult.push({
-                                jobs: {
-                                    textKeyWordName: resultsProfession.textKeyWordName,
-                                    textKeyWords: resultsProfession.textKeyWords,
-                                    textKeyWordsOriginal: resultsProfession.textKeyWordsOriginal,
-                                    algorithm: studentR.name,
-                                    name: professionName,
-                                    value: peasonResult,
-                                    jobName: resultsProfession.jobName,
-                                    jobNameOriginal: resultsProfession.jobNameOriginal,
-                                    jobKeyWords: isJobKeyWords ? resultsProfession.jobKeyWords : null,
-                                    jobKeyWordsOriginal: isJobKeyWords ? resultsProfession.jobKeyWordsOriginal : null,
-                                }
+                                textKeyWordName: resultsProfession.textKeyWordName,
+                                textKeyWords: resultsProfession.textKeyWords,
+                                textKeyWordsOriginal: resultsProfession.textKeyWordsOriginal,
+                                algorithm: studentR.name,
+                                name: professionName,
+                                value: peasonResult,
+                                jobName: resultsProfession.jobName,
+                                jobNameOriginal: resultsProfession.jobNameOriginal,
+                                jobKeyWords: isJobKeyWords ? resultsProfession.jobKeyWords : null,
+                                jobKeyWordsOriginal: isJobKeyWords ? resultsProfession.jobKeyWordsOriginal : null,
                             });
                         }
 

@@ -7,6 +7,8 @@ module.exports = function (app) {
 
   app.route('/student')
     .post(studentController.add)
+
+  app.route('/student/:id')
     .get(studentController.listResultByStudentCpf);
 
 };

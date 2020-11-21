@@ -1,5 +1,6 @@
 
 var StudentModel = require('../models/studentModel');
+var PersonModel = require('../models/personModel');
 exports.add = function (req, res) {
   const student = new StudentModel(
     req.body.text,
@@ -9,5 +10,5 @@ exports.add = function (req, res) {
 };
 
 exports.listResultByStudentCpf = function (req, res) {
-  res.json("results");
+  PersonModel.getResults(res, req.params.id);
 };
