@@ -28,6 +28,7 @@ exports.functionPearsonCalculation = async function (change, context) {
                 listProfessionals.push({
                     id: doc.id,
                     jobName: removeSpecialCharacter(doc.data().job.name),
+                    jobNameOriginal: doc.data().job.name,
                     jobKeyWords: removeSpecialCharacterArray(doc.data().job.keyWords),
                     jobKeyWordsOriginal: doc.data().job.keyWords,
                     algorithms: doc.data().algorithms,
@@ -71,13 +72,6 @@ exports.functionPearsonCalculation = async function (change, context) {
             // GROUP (p) by key words text
             groupTextKeyWordsProfessionalsKeyWord = groupByMapArray(groupProfessionalsKeyWord, 'textKeyWords', elementsArrayStringProfessionalsKeyWord);
 
-            // THIS
-            db.collection('groupTextKeyWordsProfessionalsKeyWord').doc('1').set({
-                groupTextKeyWordsProfessionalsKeyWord: groupTextKeyWordsProfessionalsKeyWord,
-            });
-
-
-            // get text student
             db.collection('person').where('cpf', '==', change.after.data().cpf).get().then(snapshotPerson => {
                 if (snapshotPerson.empty) return;
 
@@ -94,23 +88,16 @@ exports.functionPearsonCalculation = async function (change, context) {
                     });
                 });
                 groupTextKeyWordsStudents = groupByArrayList(listStudents, 'textKeyWords');
-                // THIS
 
-
-                // with 5 month divisions
-
-
-                // apply combinational analysis (groupTextKeyWordsProfessionalsName);
-                listResultJobs = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsName, groupTextKeyWordsStudents)
+                listResultJobs = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsName, groupTextKeyWordsStudents, false)
+                listResultJobsKeyWord = applyCombinationalAnalysis(groupTextKeyWordsProfessionalsKeyWord, groupTextKeyWordsStudents, true)
                 db.collection('results').doc(change.after.data().cpf).set({
                     idPerson: change.after.id,
                     cpfPerson: change.after.data().cpf,
                     typePerson: STUDENT,
-                    jobs: listResultJobs,
+                    jobs: [...listResultJobs, ...listResultJobsKeyWord],
                     timestamp: new Date()
                 });
-
-                // apply combinational analysis (groupTextKeyWordsProfessionalsKeyWord);
 
 
             }).catch(error => {
@@ -229,7 +216,7 @@ function groupByArrayList(array, prop) {
 
 }
 
-function applyCombinationalAnalysis(professionals, studentSubjectMatters) {
+function applyCombinationalAnalysis(professionals, studentSubjectMatters, isJobKeyWords) {
     let listResult = [];
     professionals.forEach(professional => {
         let professionName = professional.name;
@@ -241,7 +228,12 @@ function applyCombinationalAnalysis(professionals, studentSubjectMatters) {
                 name: professionName,
                 textKeyWordName: textKeyWordName,
                 algorithms: textKeyWordMap.map(value => value.algorithms),
-                textKeyWordsOriginal: textKeyWordMap.map(value => value.textKeyWordsOriginal),
+                textKeyWords: [... new Set(textKeyWordMap.map(value => value.textKeyWords).reduce((a, b) => a.concat(b)))],
+                textKeyWordsOriginal: [... new Set(textKeyWordMap.map(value => value.textKeyWordsOriginal).reduce((a, b) => a.concat(b)))],
+                jobName: textKeyWordMap[0].jobName,
+                jobNameOriginal: textKeyWordMap[0].jobNameOriginal,
+                jobKeyWords: [... new Set(textKeyWordMap.map(value => value.jobKeyWords).reduce((a, b) => a.concat(b)))],
+                jobKeyWordsOriginal: [... new Set(textKeyWordMap.map(value => value.jobKeyWordsOriginal).reduce((a, b) => a.concat(b)))],
             };
             studentSubjectMatters.forEach(studentSubjectMatter => {
                 subjectMatterMap = studentSubjectMatter[resultsProfession.textKeyWordName];
@@ -273,15 +265,22 @@ function applyCombinationalAnalysis(professionals, studentSubjectMatters) {
                             }
                             let peasonResult = 0;
                             if (numberCombinations == 0) {
-                                peasonResult = pearson(studentR.values, professionR.values)
+                                peasonResult = Math.abs(pearson(studentR.values, professionR.values));
                             } else {
                                 peasonResult = getValuePearsonCombination(arrayCombination, arrayCompare, numberCombinations)
                             }
                             listResult.push({
                                 jobs: {
-                                    textKeyWordName: textKeyWordName,
+                                    textKeyWordName: resultsProfession.textKeyWordName,
+                                    textKeyWords: resultsProfession.textKeyWords,
+                                    textKeyWordsOriginal: resultsProfession.textKeyWordsOriginal,
+                                    algorithm: studentR.name,
                                     name: professionName,
-                                    value: peasonResult
+                                    value: peasonResult,
+                                    jobName: resultsProfession.jobName,
+                                    jobNameOriginal: resultsProfession.jobNameOriginal,
+                                    jobKeyWords: isJobKeyWords ? resultsProfession.jobKeyWords : null,
+                                    jobKeyWordsOriginal: isJobKeyWords ? resultsProfession.jobKeyWordsOriginal : null,
                                 }
                             });
                         }
@@ -309,6 +308,7 @@ function getValuePearsonCombination(arrayCombination, arrayCompare, numberCombin
         return a + b;
     }, 0) / values.length
 }
+
 function combine(a, q) {
     var n = a.length - 1, l = n - q + 1, x = 0, c = [], z = -1, p, j, d, i;
     if (q > n || q < 2) return c;
